@@ -1,0 +1,110 @@
+
+(add-ns tcp (git-dependency "github.com:jduey/tcp.git" "tcp.toc"))
+(add-ns http (git-dependency "github.com:jduey/http.git" "http.toc"))
+(add-ns rd (git-dependency "github.com:jduey/recursive-descent.git" "recursive-descent.toc"))
+(add-ns sys (git-dependency "github.com:jduey/system.git" "system.toc"))
+(add-ns fio (git-dependency "github.com:jduey/file-io.git" "file-io.toc"))
+
+(add-ns h (module "html/html.toc"))
+
+(def parse-http (rd/parser http/request-message))
+
+(defprotocol WebResponse
+  (send-response [v socket]
+    (print-err 'send-response (type-name v))
+    (abort)))
+
+(extend-type String
+  WebResponse
+  (send-response [v socket]
+    (tcp/write socket (str v))))
+
+(extend-type Vector
+  WebResponse
+  (send-response [v socket]
+    (map v (fn [x] (send-response x socket)))))
+
+(extend-type List
+  WebResponse
+  (send-response [v socket]
+    (map v (fn [x] (send-response x socket)))))
+
+(extend-type h/EmptyHTMLElement
+  http/Headers
+  (http/content-type [_] "text/html")
+
+  WebResponse
+  (send-response [el socket]
+    (send-response "<" socket)
+    (send-response (interpose (cons (.tag el)
+                                    (map (.attrs el)
+                                         (fn [[k v]] (str k "=\"" v "\""))))
+                              " ")
+                   socket)
+    (send-response "/>" socket)))
+
+(extend-type h/HTMLElement
+  http/Headers
+  (http/content-type [_] "text/html")
+
+  WebResponse
+  (send-response [el socket]
+    (send-response "<" socket)
+    (send-response (interpose (cons (.tag el)
+                                    (map (.attrs el)
+                                         (fn [[k v]] (str k "=\"" v "\""))))
+                              " ")
+                   socket)
+    (send-response "> " socket)
+    (send-response (.elements el) socket)
+    (send-response ["</" (.tag el) ">"] socket)))
+
+(def not-found (http/response 404 "Resource Not Found"
+                              (h/html
+                               (h/body
+                                (h/h2 "404: Resource Not Found")))))
+
+(extend-type fio/InputFile
+  WebResponse
+  (send-response [file connection]
+    (or (empty? file)
+        (let [_ (tcp/write connection (extract file))]
+          (send-response file connection)))))
+
+(defn directory-page [path]
+  (let [path-str (apply str (interpose path "/"))]
+    (for [link-prefix (or (= "" path-str)
+                          (maybe (str "/" path-str)))
+          parent (or (= "" path-str)
+                     (maybe (list (h/a {"href" (apply str "/" (interpose (butlast path) "/"))}
+                                       "Parent Directory")
+                                  (h/br))))
+          :let [path-str ((= path-str "") "." path-str)]
+          dir-entries (sys/list-files path-str)]
+      (let [links (cons parent (map dir-entries
+                                    (fn [entry]
+                                      (list (h/a {"href" (str link-prefix "/" (.name entry))}
+                                                 (.name entry))
+                                            (h/br)))))]
+        (h/html
+         (h/head (h/title (str "Index of " path-str)))
+         (h/body (h/h1 (str "Index of " path-str))
+                 (apply h/pre links)))))))
+
+(defn handle-connection [socket]
+  (future (fn []
+            (or (for [req (parse-http (cache socket))
+                      path (:path req)
+                      resp (or (directory-page path)
+                               (fio/file-in (apply str (interpose path "/"))))]
+                  (send-response (http/response 200 "OK" resp) socket))
+                (maybe (send-response not-found socket))))))
+
+(defn handle-connections [server-socket]
+  (map (extract server-socket) handle-connection)
+  (handle-connections server-socket))
+
+(main [_]
+      (let [port 8080]
+        (or (map (tcp/listen port) handle-connections)
+            (maybe (println "Could not listen on" port)))))
