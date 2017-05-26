@@ -1,0 +1,72 @@
+
+(deftype EmptyHTMLElement [tag attrs])
+
+(deftype HTMLElement [tag attrs elements])
+
+(defprotocol HTMLTag
+  (make-element [element tag]
+    (HTMLElement (str tag) empty-list (list element)))
+  (make-element [element tag elements]
+    (HTMLElement (str tag) empty-list (cons element elements))))
+
+(extend-type HashMap
+  HTMLTag
+  (make-element [attrs tag] (EmptyHTMLElement (str tag) (seq attrs)))
+  (make-element [attrs tag elements] (HTMLElement (str tag) (seq attrs) elements)))
+
+(defn tag [tag]
+  (fn
+    ([] (EmptyHTMLElement (str tag) empty-list))
+    ([attrs-or-element] (make-element attrs-or-element tag))
+    ([attrs-or-element & elements] (make-element attrs-or-element tag elements))))
+
+(def a (tag 'a))
+(def abbr (tag 'abbr))
+(def acronym (tag 'acronym))
+(def blockquote (tag 'blockquote))
+(def body (tag 'body))
+(def br (tag 'br))
+(def button (tag 'button))
+(def caption (tag 'caption))
+(def cite (tag 'cite))
+(def code (tag 'code))
+(def col (tag 'col))
+(def dfn (tag 'dfn))
+(def div (tag 'div))
+(def dl (tag 'dl))
+(def dt (tag 'dt))
+(def dd (tag 'dd))
+(def em (tag 'em))
+(def form (tag 'form))
+(def h1 (tag 'h1))
+(def h2 (tag 'h2))
+(def h3 (tag 'h3))
+(def h4 (tag 'h4))
+(def head (tag 'head))
+(def html (tag 'html))
+(def img (tag 'img))
+(def input (tag 'input))
+(def link (tag 'link))
+(def li (tag 'li))
+(def meta (tag 'meta))
+(def ol (tag 'ol))
+(def option (tag 'option))
+(def param (tag 'param))
+(def p (tag 'p))
+(def pre (tag 'pre))
+(def q (tag 'q))
+(def script (tag 'script))
+(def select (tag 'select))
+(def span (tag 'span))
+(def strong (tag 'strong))
+(def style (tag 'style))
+(def table (tag 'table))
+(def td (tag 'td))
+(def textarea (tag 'textarea))
+(def th (tag 'th))
+(def tbody (tag 'tbody))
+(def thead (tag 'thead))
+(def tfoot (tag 'tfoot))
+(def title (tag 'title))
+(def tr (tag 'tr))
+(def ul (tag 'ul))
